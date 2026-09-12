@@ -16,19 +16,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/exemt/placitum-geo/internal/logkit"
+	"github.com/exemt/placitum-shared/loglevel"
 )
 
 type Config struct {
-	Country         string
-	ASN             string
-	HTTP            string
-	GRPC            string
-	NatsURL         string
-	ServiceName     string
-	HeartbeatEvery  time.Duration
-	ReloadEvery     time.Duration
-	LogLevel        slog.Level
+	Country        string
+	ASN            string
+	HTTP           string
+	GRPC           string
+	NatsURL        string
+	ServiceName    string
+	HeartbeatEvery time.Duration
+	ReloadEvery    time.Duration
+	LogLevel       slog.Level
 }
 
 func Load() (*Config, error) {
@@ -127,11 +127,11 @@ func envDuration(name string, def time.Duration) (time.Duration, error) {
 
 /*
  * Стартовый порог журнала: словарь error_log nginx без emerg -- тот же, что у
- * инспекторов и у документа policy/log-levels (internal/logkit). Документ
+ * инспекторов и у документа policy/log-levels (shared/logkit). Документ
  * переставляет порог живьём, переменная действует до него.
  */
 func parseLevel(s string) (slog.Level, error) {
-	level, err := logkit.Parse(s)
+	level, err := loglevel.Parse(s)
 	if err != nil {
 		return 0, fmt.Errorf("WAF_GEO_LOG: %w", err)
 	}

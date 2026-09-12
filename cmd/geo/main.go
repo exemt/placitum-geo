@@ -25,10 +25,10 @@ import (
 	"github.com/exemt/placitum-geo/internal/config"
 	"github.com/exemt/placitum-geo/internal/grpcapi"
 	"github.com/exemt/placitum-geo/internal/httpapi"
-	"github.com/exemt/placitum-geo/internal/logkit"
 	"github.com/exemt/placitum-geo/internal/pulse"
 	"github.com/exemt/placitum-geo/internal/store"
 	geopb "github.com/exemt/placitum-geo/proto"
+	"github.com/exemt/placitum-shared/logkit"
 )
 
 func main() {
@@ -45,7 +45,7 @@ func run() error {
 	}
 
 	/*
-	 * Журнал кодера -- в waf.log (internal/logkit). Шина у geo необязательна и
+	 * Журнал кодера -- в waf.log (shared/logkit). Шина у geo необязательна и
 	 * поднимается пульсом в фоне; пока её нет, строки старта копятся и уезжают
 	 * первой пачкой, а порог держит WAF_GEO_LOG до первого документа
 	 * policy/log-levels.
