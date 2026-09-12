@@ -1,0 +1,11 @@
+# Контекст сборки: в образ едет бинарь; тесты и testdata нужны сборке
+# (RUN go test), но во вторую стадию не попадают.
+
+README.md
+INSTALL.md
+LICENSE.md
+LICENSE.ru.md
+docs/
+.github/
+.gitignore
+.gitattributes
