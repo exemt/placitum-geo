@@ -54,6 +54,8 @@ func run() error {
 	defer journal.Close()
 
 	log := journal.Log
+
+	log.Info("build", "version", version, "revision", revision)
 	slog.SetDefault(log)
 
 	data, err := store.Load(store.Paths{Country: cfg.Country, ASN: cfg.ASN}, log)
@@ -185,6 +187,7 @@ func startHeartbeat(ctx context.Context, cfg *config.Config, data *store.Store, 
 				Fingerprint: st.Fingerprint,
 			}
 			msg := pulse.Build(id, cfg.ServiceName, st.Countries > 0 || st.ASNs > 0, work)
+			msg.Version, msg.Revision = version, revision
 			if err := pulse.Publish(nc, msg); err != nil {
 				log.Warn("heartbeat failed", "error", err.Error())
 				return

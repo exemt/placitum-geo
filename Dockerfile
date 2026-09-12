@@ -25,7 +25,11 @@ COPY testdata ./testdata
 COPY e2e_test.go ./
 RUN go test ./...
 
-RUN go build -trimpath -ldflags="-s -w" -o /out/waf-geo ./cmd/geo
+# Сборка в бинарь: версия и ревизия видны в журнале старта и в кадре
+# присутствия, а не только в метках образа.
+ARG VERSION=dev
+ARG REVISION=unknown
+RUN go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.revision=${REVISION}" -o /out/waf-geo ./cmd/geo
 
 FROM alpine:3.22
 
