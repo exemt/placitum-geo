@@ -336,6 +336,12 @@ func kindName(k Kind) string {
 	return "country"
 }
 
+// String -- имя вида: country или asn. Им же названы копии выгрузок и путь
+// контроллера, с которого они скачиваются.
+func (k Kind) String() string {
+	return kindName(k)
+}
+
 func labelOf(raw string, kind Kind) (code, name string, ok bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

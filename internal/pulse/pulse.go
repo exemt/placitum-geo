@@ -4,7 +4,8 @@
  * и ставит degraded по тишине.
  *
  * Шапка кадра общая (pulse.Frame из placitum-shared); своё здесь — work:
- * размер и поколение загруженного каталога.
+ * размер и поколение загруженного каталога, и conf: какой документ
+ * policy/geo кодер применил (internal/fetch).
  */
 
 package pulse
@@ -15,17 +16,33 @@ import (
 	shared "github.com/exemt/placitum-shared/pulse"
 )
 
+/*
+ * Work -- что кодер держит в памяти. CountrySHA256 и ASNSHA256 -- хеш копии
+ * выгрузки из панели, по которой он отвечает; пусто -- каталог из окружения.
+ * По ним панель видит, переключился ли кодер на загруженный файл.
+ */
 type Work struct {
-	Countries   int    `json:"countries,omitempty"`
-	ASNs        int    `json:"asns,omitempty"`
-	Skipped     int    `json:"skipped,omitempty"`
-	Gen         uint64 `json:"gen,omitempty"`
-	Fingerprint string `json:"fingerprint,omitempty"`
+	Countries     int    `json:"countries,omitempty"`
+	ASNs          int    `json:"asns,omitempty"`
+	Skipped       int    `json:"skipped,omitempty"`
+	Gen           uint64 `json:"gen,omitempty"`
+	Fingerprint   string `json:"fingerprint,omitempty"`
+	CountrySHA256 string `json:"country_sha256,omitempty"`
+	ASNSHA256     string `json:"asn_sha256,omitempty"`
+}
+
+// Conf -- документ policy/geo, за который кодер брался последним: ревизия,
+// хеш и исход. Форма та же, что `conf` у агента haproxy.
+type Conf struct {
+	Rev    int    `json:"rev"`
+	SHA256 string `json:"sha256"`
+	Apply  string `json:"apply"`
 }
 
 type Message struct {
 	shared.Frame
-	Work Work `json:"work"`
+	Work Work  `json:"work"`
+	Conf *Conf `json:"conf,omitempty"`
 }
 
 func NewID() string {

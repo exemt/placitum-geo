@@ -1,9 +1,14 @@
 package load
 
 import (
+	"net/netip"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/exemt/placitum-geo/internal/mmdbtest"
+	"github.com/exemt/placitum-geo/internal/table"
 )
 
 func TestDirCountry(t *testing.T) {
@@ -87,6 +92,71 @@ func TestTSV(t *testing.T) {
 
 	if skip != 2 || len(es) != 1 || es[0].Code != "15169" {
 		t.Fatalf("asn tsv: n=%d skip=%d %+v", len(es), skip, es)
+	}
+}
+
+/*
+ * MMDB -- тот вид, в котором кодер получает выгрузку из панели. База
+ * собрана mmdbtest в раскладке GeoLite2: IPv6-дерево, IPv4 под ::/96.
+ */
+func TestMMDB(t *testing.T) {
+	dir := t.TempDir()
+
+	write := func(name string, body []byte) string {
+		t.Helper()
+
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		return path
+	}
+
+	country := write("GeoLite2-Country.mmdb", mmdbtest.Build("GeoLite2-Country", []mmdbtest.Network{
+		{CIDR: "8.8.8.0/24", Record: map[string]any{"country": map[string]any{"iso_code": "US", "names": map[string]any{"en": "United States"}}}},
+		{CIDR: "1.0.0.0/24", Record: map[string]any{"registered_country": map[string]any{"iso_code": "AU"}}},
+		{CIDR: "2a02:6b8::/32", Record: map[string]any{"country": map[string]any{"iso_code": "RU", "names": map[string]any{"ru": "Россия"}}}},
+	}))
+
+	es, skip, err := Path(country, KindCountry)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if skip != 0 || len(es) != 3 {
+		t.Fatalf("country: n=%d skip=%d %+v", len(es), skip, es)
+	}
+
+	tbl := table.Build(es)
+
+	for addr, want := range map[string]string{
+		"8.8.8.8":     "us/United States",
+		"1.0.0.1":     "au/AU",
+		"2a02:6b8::1": "ru/Россия",
+	} {
+		hit, ok := tbl.Lookup(netip.MustParseAddr(addr))
+		if got := hit.Code + "/" + hit.Name; !ok || got != want {
+			t.Fatalf("%s: %q ok=%v, want %q", addr, got, ok, want)
+		}
+	}
+
+	asn := write("GeoLite2-ASN.mmdb", mmdbtest.Build("GeoLite2-ASN", []mmdbtest.Network{
+		{CIDR: "8.8.8.0/24", Record: map[string]any{"autonomous_system_number": 15169, "autonomous_system_organization": "GOOGLE"}},
+	}))
+
+	es, _, err = Path(asn, KindASN)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(es) != 1 || es[0].Code != "15169" || es[0].Name != "GOOGLE" {
+		t.Fatalf("asn: %+v", es)
+	}
+
+	/* База не того вида -- отказ, а не пустой каталог. */
+	if _, _, err := Path(asn, KindCountry); err == nil {
+		t.Fatal("asn database accepted as country")
 	}
 }
 

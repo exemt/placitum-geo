@@ -2,7 +2,8 @@
  * Точка входа geo/asn кодера.
  *
  * Таблицы собираются до listen: ошибка в каталоге обязана обнаружиться
- * при старте, а не на первом запросе. Дальше store сам перечитывает диск.
+ * при старте, а не на первом запросе. Дальше store сам перечитывает диск,
+ * а копии выгрузок, загруженных в панель, приносит internal/fetch.
  */
 
 package main
@@ -23,8 +24,10 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"github.com/exemt/placitum-geo/internal/config"
+	"github.com/exemt/placitum-geo/internal/fetch"
 	"github.com/exemt/placitum-geo/internal/grpcapi"
 	"github.com/exemt/placitum-geo/internal/httpapi"
+	"github.com/exemt/placitum-geo/internal/load"
 	"github.com/exemt/placitum-geo/internal/pulse"
 	"github.com/exemt/placitum-geo/internal/store"
 	geopb "github.com/exemt/placitum-geo/proto"
@@ -58,7 +61,7 @@ func run() error {
 	log.Info("build", "version", version, "revision", revision)
 	slog.SetDefault(log)
 
-	data, err := store.Load(store.Paths{Country: cfg.Country, ASN: cfg.ASN}, log)
+	data, syncer, err := loadData(cfg, log)
 	if err != nil {
 		return err
 	}
@@ -68,6 +71,8 @@ func run() error {
 		"countries", st.Countries,
 		"asns", st.ASNs,
 		"skipped", st.Skipped,
+		"country_sha256", st.CountrySHA256,
+		"asn_sha256", st.ASNSHA256,
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -78,7 +83,7 @@ func run() error {
 
 	go data.Watch(watchCtx, cfg.ReloadEvery)
 	go sighup(ctx, data, log)
-	stopBeat := startHeartbeat(ctx, cfg, data, journal)
+	stopBeat := startHeartbeat(ctx, cfg, data, syncer, journal)
 	defer stopBeat()
 
 	errc := make(chan error, 2)
@@ -147,7 +152,70 @@ func run() error {
 	}
 }
 
-func startHeartbeat(ctx context.Context, cfg *config.Config, data *store.Store, journal *logkit.Journal) func() {
+/*
+ * loadData -- таблицы до listen. Копия выгрузки, скачанная прошлым запуском,
+ * выигрывает у каталога из окружения: это последнее, что оператор загрузил в
+ * панель, и кодер поднимается на ней, не дожидаясь ни шины, ни контроллера.
+ * Без адреса контроллера копий нет вовсе -- только каталог из окружения.
+ */
+func loadData(cfg *config.Config, log *slog.Logger) (*store.Store, *fetch.Syncer, error) {
+	configured := store.Sources{
+		Country: store.Source{Path: cfg.Country},
+		ASN:     store.Source{Path: cfg.ASN},
+	}
+
+	if cfg.ControllerURL == "" {
+		data, err := store.LoadSources(configured, log)
+		return data, nil, err
+	}
+
+	kept, err := fetch.Restore(cfg.FetchDir, log)
+	if err != nil {
+		return nil, nil, fmt.Errorf("WAF_GEO_FETCH_DIR: %w", err)
+	}
+
+	sources := configured
+	if src, ok := kept[load.KindCountry]; ok {
+		sources.Country = src
+	}
+	if src, ok := kept[load.KindASN]; ok {
+		sources.ASN = src
+	}
+
+	data, err := store.LoadSources(sources, log)
+	if err != nil && len(kept) > 0 {
+		/*
+		 * Хеш копии сошёлся, а разбор нет. Уходить в рестарт из-за файла,
+		 * который кодер сам же и скачал, нельзя: старт на каталоге из
+		 * окружения, а копию документ policy/geo пришлёт заново.
+		 */
+		log.Warn("geo copy unusable, starting on configured catalog", "error", err.Error())
+
+		for _, src := range kept {
+			_ = os.Remove(src.Path)
+		}
+
+		data, err = store.LoadSources(configured, log)
+	}
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if cfg.NatsURL == "" {
+		log.Warn("geo copies are not followed: WAF_NATS_URL is empty")
+	}
+
+	return data, fetch.New(cfg.FetchDir, cfg.ControllerURL, data, log), nil
+}
+
+func startHeartbeat(
+	ctx context.Context,
+	cfg *config.Config,
+	data *store.Store,
+	syncer *fetch.Syncer,
+	journal *logkit.Journal,
+) func() {
 	log := journal.Log
 
 	if cfg.NatsURL == "" {
@@ -170,6 +238,11 @@ func startHeartbeat(ctx context.Context, cfg *config.Config, data *store.Store, 
 		journal.Attach(ctx, nc)
 		defer journal.Close()
 
+		// Документ policy/geo -- на том же соединении: выгрузки из панели.
+		if syncer != nil {
+			go syncer.Watch(ctx, nc)
+		}
+
 		log.Info("heartbeat on",
 			"name", cfg.ServiceName,
 			"id", id,
@@ -180,14 +253,23 @@ func startHeartbeat(ctx context.Context, cfg *config.Config, data *store.Store, 
 		beat := func() {
 			st := data.Current().Stats()
 			work := pulse.Work{
-				Countries:   st.Countries,
-				ASNs:        st.ASNs,
-				Skipped:     st.Skipped,
-				Gen:         st.Gen,
-				Fingerprint: st.Fingerprint,
+				Countries:     st.Countries,
+				ASNs:          st.ASNs,
+				Skipped:       st.Skipped,
+				Gen:           st.Gen,
+				Fingerprint:   st.Fingerprint,
+				CountrySHA256: st.CountrySHA256,
+				ASNSHA256:     st.ASNSHA256,
 			}
 			msg := pulse.Build(id, cfg.ServiceName, st.Countries > 0 || st.ASNs > 0, work)
 			msg.Version, msg.Revision = version, revision
+
+			if syncer != nil {
+				if rev, sha, apply := syncer.Conf(); rev > 0 {
+					msg.Conf = &pulse.Conf{Rev: rev, SHA256: sha, Apply: apply}
+				}
+			}
+
 			if err := pulse.Publish(nc, msg); err != nil {
 				log.Warn("heartbeat failed", "error", err.Error())
 				return

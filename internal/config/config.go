@@ -4,6 +4,11 @@
  * Пути к country и asn проверяются здесь: сервис, который тихо отдаёт
  * пустые списки из-за опечатки в каталоге, хуже не запустившегося.
  * Содержимое этих путей -- уже store, и оно перечитывается на ходу.
+ *
+ * Адрес контроллера необязателен: без него кодер не скачивает выгрузки,
+ * загруженные в панель, и живёт на каталоге из окружения. Названный же адрес
+ * обязан быть адресом -- опечатка молча оставила бы кодер на старой выгрузке,
+ * пока панель показывает новую.
  */
 
 package config
@@ -11,6 +16,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +31,8 @@ type Config struct {
 	HTTP           string
 	GRPC           string
 	NatsURL        string
+	ControllerURL  string
+	FetchDir       string
 	ServiceName    string
 	HeartbeatEvery time.Duration
 	ReloadEvery    time.Duration
@@ -33,12 +41,14 @@ type Config struct {
 
 func Load() (*Config, error) {
 	c := &Config{
-		Country:     env("WAF_GEO_COUNTRY", "./data/country"),
-		ASN:         env("WAF_GEO_ASN", "./data/asn"),
-		HTTP:        envKeep("WAF_GEO_HTTP", ":8092"),
-		GRPC:        envKeep("WAF_GEO_GRPC", ":50051"),
-		NatsURL:     envKeep("WAF_NATS_URL", "nats://127.0.0.1:4222"),
-		ServiceName: env("WAF_SERVICE_NAME", "geo"),
+		Country:       env("WAF_GEO_COUNTRY", "./data/country"),
+		ASN:           env("WAF_GEO_ASN", "./data/asn"),
+		HTTP:          envKeep("WAF_GEO_HTTP", ":8092"),
+		GRPC:          envKeep("WAF_GEO_GRPC", ":50051"),
+		NatsURL:       envKeep("WAF_NATS_URL", "nats://127.0.0.1:4222"),
+		ControllerURL: strings.TrimRight(envKeep("WAF_GEO_CONTROLLER_URL", ""), "/"),
+		FetchDir:      env("WAF_GEO_FETCH_DIR", "./data/fetched"),
+		ServiceName:   env("WAF_SERVICE_NAME", "geo"),
 	}
 
 	var err error
@@ -86,6 +96,20 @@ func (c *Config) validate() error {
 		case "WAF_GEO_ASN":
 			c.ASN = abs
 		}
+	}
+
+	if c.ControllerURL != "" {
+		u, err := url.Parse(c.ControllerURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return fmt.Errorf("WAF_GEO_CONTROLLER_URL: want http(s)://host[:port], got %q", c.ControllerURL)
+		}
+
+		abs, err := filepath.Abs(c.FetchDir)
+		if err != nil {
+			return fmt.Errorf("WAF_GEO_FETCH_DIR: %w", err)
+		}
+
+		c.FetchDir = abs
 	}
 
 	return nil

@@ -50,10 +50,17 @@ COPY --from=build /out/waf-geo /usr/local/bin/waf-geo
 
 RUN adduser -D -H -u 10004 wafgeo
 
+# Копии выгрузок, загруженных в панель: кодер скачивает их у контроллера и
+# поднимается на последней, не дожидаясь ни шины, ни контроллера. Том сюда
+# монтирует установка; без тома копия живёт до пересоздания контейнера.
+RUN mkdir -p /var/lib/waf/geo && chown wafgeo /var/lib/waf/geo
+
 USER wafgeo
 
 ENV WAF_GEO_COUNTRY=/app/data/country \
     WAF_GEO_ASN=/app/data/asn \
+    WAF_GEO_FETCH_DIR=/var/lib/waf/geo \
+    WAF_GEO_CONTROLLER_URL=http://controller:8080 \
     WAF_GEO_HTTP=:8092 \
     WAF_GEO_GRPC=:50051 \
     WAF_NATS_URL=nats://nats:4222
