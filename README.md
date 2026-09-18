@@ -2,7 +2,7 @@
 
 English · [Русский](README.ru.md)
 
-Placitum geo coder: country and autonomous system number by client address.
+Placitum network directory: country and autonomous system number by client address.
 
 It answers two clients: inspectors over gRPC, when a rule writes a subnet or a whole AS to a
 dataset instead of an address, and the panel over HTTP, for the address card. It stays out of the
@@ -16,10 +16,10 @@ inspector ──gRPC :50051──►  geo  ◄──HTTP :8092── controller 
 ```
 
 The catalog is neither a database nor a network service: files on disk that the process keeps in
-memory and rereads by itself. An empty catalog is a working state: the coder answers "unknown", and
+memory and rereads by itself. An empty catalog is a working state: the network directory answers "unknown", and
 rules that need it reject explicitly instead of staying silent.
 
-The operator uploads the MaxMind export in the panel. The coder learns about it from a KV document,
+The operator uploads the MaxMind export in the panel. The network directory learns about it from a KV document,
 downloads a copy from the controller, builds new tables next to the current ones and swaps them in;
 until the swap it keeps answering from the previous tables.
 
