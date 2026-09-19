@@ -26,7 +26,7 @@ ARG REVISION=unknown
 LABEL org.opencontainers.image.title="placitum/geo" \
       org.opencontainers.image.description="Placitum geo coder: country and ASN by address over gRPC and HTTP" \
       org.opencontainers.image.source="https://github.com/exemt/placitum-geo" \
-      org.opencontainers.image.licenses="LicenseRef-Placitum" \
+      org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
 
