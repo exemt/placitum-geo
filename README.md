@@ -15,9 +15,9 @@ inspector ──gRPC :50051──►  geo  ◄──HTTP :8092── controller 
                              └── catalog: country prefixes and AS announcements
 ```
 
-The catalog is neither a database nor a network service: files on disk that the process keeps in
-memory and rereads by itself. An empty catalog is a working state: the network directory answers "unknown", and
-rules that need it reject explicitly instead of staying silent.
+The catalog is a set of files on disk; the process keeps them in memory and rereads them by itself.
+An empty catalog is a working state: the network directory answers "unknown", and rules that need it
+reject explicitly.
 
 The operator uploads the MaxMind export in the panel. The network directory learns about it from a KV document,
 downloads a copy from the controller, builds new tables next to the current ones and swaps them in;
@@ -75,17 +75,17 @@ A path can point to a directory, a `.tsv` file or a `.mmdb` file; the format fol
 A text file has one prefix or address per line; `#` starts a comment, and `# name: United States`
 sets the label. Country codes are ISO 3166-1 alpha-2 in lower case.
 
-## Good to know
+## Running it
 
-- **An answer costs a fraction of a millisecond**, but inspectors wait for it synchronously within
-  the message budget: a miss means a rejected rule line, not a slower request.
-- **The catalog updates on the fly.** Upload a file in the panel or put files into the directory:
-  the process picks them up without a restart.
-- **No state of its own.** Run as many replicas as you like, each with its own catalog.
+An answer costs a fraction of a millisecond, and inspectors wait for it synchronously within the
+message budget, so a miss rejects the rule line and does not slow the request down. The catalog
+updates on the fly: upload a file in the panel or put files into the directory, and the process picks
+them up without a restart. The process keeps no state of its own, so run as many replicas as you
+like, each with its own catalog.
 
 ## License
 
 [Apache License 2.0](LICENSE); the attribution notice is in [NOTICE](NOTICE). This repository is
 part of the Placitum open core. The inspectors are licensed separately: each inspector repository
-carries the Placitum License Agreement. Releases made before this change came under the Placitum
+carries the Placitum License Agreement. Versions up to 1.0.1 were released under the Placitum
 License Agreement 1.1.
