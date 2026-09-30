@@ -32,6 +32,16 @@ docker run --rm -p 8092:8092 -p 50051:50051 \
   placitum/geo
 ```
 
+С файлами MaxMind укажите в `WAF_GEO_COUNTRY` и `WAF_GEO_ASN` сами файлы:
+
+```sh
+docker run --rm -p 8092:8092 -p 50051:50051 \
+  -v /path/GeoLite2-Country.mmdb:/app/data/country.mmdb:ro \
+  -v /path/GeoLite2-ASN.mmdb:/app/data/asn.mmdb:ro \
+  -e WAF_GEO_COUNTRY=/app/data/country.mmdb -e WAF_GEO_ASN=/app/data/asn.mmdb \
+  placitum/geo
+```
+
 Что нужно рядом, настройки и откуда берётся каталог — в [INSTALL.ru.md](INSTALL.ru.md).
 
 ## API
@@ -64,13 +74,14 @@ gRPC `geo.v1.Geo/Lookup` (`proto/geo.proto`) и те же данные по HTTP
 ## Форматы каталога
 
 Путь может указывать на каталог, `.tsv` или `.mmdb`; формат определяется по тому, что лежит на
-диске.
+диске. Имя у `.mmdb` любое, вид берётся из его метаданных, а путь обязан называть сам файл: `.mmdb`
+внутри каталога не читается.
 
 | Источник | Страны | ASN |
 | --- | --- | --- |
-| Каталог | `<код>.txt` или `<код>/ranges.txt` | `<номер>.txt` или `<номер>/ranges.txt` |
+| Каталог | `<код>.txt` или все файлы в `<код>/` | `<номер>.txt` или все файлы в `<номер>/` |
 | TSV | выгрузка контроллера: `code type address name` | то же, `code` — номер AS |
-| MMDB | `GeoLite2-Country.mmdb` | `GeoLite2-ASN.mmdb` |
+| MMDB | файл стран, `GeoLite2-Country.mmdb` | файл ASN, `GeoLite2-ASN.mmdb` |
 
 Текстовый файл — один префикс или адрес на строку; `#` — комментарий, `# name: United States`
 задаёт подпись. Код страны — ISO 3166-1 alpha-2 в нижнем регистре.

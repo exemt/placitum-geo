@@ -33,6 +33,16 @@ docker run --rm -p 8092:8092 -p 50051:50051 \
   placitum/geo
 ```
 
+With MaxMind files, point `WAF_GEO_COUNTRY` and `WAF_GEO_ASN` at the files:
+
+```sh
+docker run --rm -p 8092:8092 -p 50051:50051 \
+  -v /path/GeoLite2-Country.mmdb:/app/data/country.mmdb:ro \
+  -v /path/GeoLite2-ASN.mmdb:/app/data/asn.mmdb:ro \
+  -e WAF_GEO_COUNTRY=/app/data/country.mmdb -e WAF_GEO_ASN=/app/data/asn.mmdb \
+  placitum/geo
+```
+
 What it needs, settings and where the catalog comes from are in [INSTALL.md](INSTALL.md).
 
 ## API
@@ -64,13 +74,15 @@ when the catalog changes, and clients drop their caches.
 
 ## Catalog formats
 
-A path can point to a directory, a `.tsv` file or a `.mmdb` file; the format follows what is on disk.
+A path can point to a directory, a `.tsv` file or an `.mmdb` file; the format follows what is on
+disk. An `.mmdb` file has any name, the kind comes from its metadata, and the path must name the
+file itself: an `.mmdb` inside a directory is not read.
 
 | Source | Country | ASN |
 | --- | --- | --- |
-| Directory | `<code>.txt` or `<code>/ranges.txt` | `<number>.txt` or `<number>/ranges.txt` |
+| Directory | `<code>.txt` or every file under `<code>/` | `<number>.txt` or every file under `<number>/` |
 | TSV | controller export: `code type address name` | the same, `code` is the AS number |
-| MMDB | `GeoLite2-Country.mmdb` | `GeoLite2-ASN.mmdb` |
+| MMDB | the country file, `GeoLite2-Country.mmdb` | the ASN file, `GeoLite2-ASN.mmdb` |
 
 A text file has one prefix or address per line; `#` starts a comment, and `# name: United States`
 sets the label. Country codes are ISO 3166-1 alpha-2 in lower case.
